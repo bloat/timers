@@ -3,20 +3,28 @@
         [clojure.contrib.server-socket :as ss])
   (:import [java.io PushbackReader]
            [java.util Date]
+           [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]
            [java.text SimpleDateFormat]))
 
 (def timers (atom {}))
 
-(defn make-timer [length]
-  (+ length (System/currentTimeMillis)))
+(def executor (ScheduledThreadPoolExecutor. 1))
+
+(defn timer-fired [action name]
+  (swap! timers dissoc name)
+  (.exec (Runtime/getRuntime) (.split action "\\s+")))
+
+(defn make-timer [{name :name action :action length :length}]
+  (.schedule executor #(timer-fired action name) (long length) TimeUnit/MILLISECONDS))
 
 (defn new-timer [command]
-  (swap! timers assoc (:name command)
-         (make-timer (:length command)))
-  (println @timers))
+  (swap! timers assoc (:name command) (make-timer command)))
 
 (defn millis-remaining [name]
-  (- (@timers name) (System/currentTimeMillis)))
+  (let [timer (@timers name)]
+    (if timer
+      (.getDelay timer TimeUnit/MILLISECONDS)
+      0)))
 
 (defn time-left [command]
   (println (.format (SimpleDateFormat. "mm:ss") (millis-remaining (:name command)))))
@@ -26,14 +34,14 @@
 (defn dispatch [command]
   (((:command command) commands) command))
 
-(defn do-stuff [in out]
+(defn handle-connection [in out]
   (let [command (read (PushbackReader. (ds/reader in)))]
     (binding [*out* (ds/writer out)]
       (dispatch command)
       (flush))))
 
-(defn main-loop []
-  (ss/create-server 9899 do-stuff))
+(defn -main []
+  (ss/create-server 9899 handle-connection))
 
 (comment
   (def server (main-loop))
@@ -41,7 +49,9 @@
 (* 1000 60 25)
   ( (:command {:command :new-timer}) commands)
 
-  (:new-timer commands)
+(new-timer {:name 'hello :length 20000})
+(millis-remaining 'hello)
+@timers
 
 )
 
