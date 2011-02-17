@@ -21,7 +21,6 @@
            [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]
            [java.text SimpleDateFormat]))
 
-
 (def timers (atom {}))
 
 (def executor (ScheduledThreadPoolExecutor. 1))
@@ -45,7 +44,12 @@
 (defn time-left [command]
   (println (.format (SimpleDateFormat. "mm:ss") (millis-remaining (:name command)))))
 
-(def commands {:new-timer new-timer :time-left time-left})
+(defn cancel-timer [{name :name}]
+  (let [timer (@timers name)]
+    (swap! timers dissoc name)
+    (.cancel timer false)))
+
+(def commands {:new-timer new-timer :time-left time-left :cancel cancel-timer})
 
 (defn dispatch [command]
   (((:command command) commands) command))
@@ -60,7 +64,7 @@
   (ss/create-server 9899 handle-connection))
 
 (comment
-  (def server (main-loop))
+  (def server (-main))
   (ss/close-server server)
 (* 1000 60 25)
   ( (:command {:command :new-timer}) commands)
@@ -68,6 +72,14 @@
 (new-timer {:name 'hello :length 20000})
 (millis-remaining 'hello)
 @timers
+
+(var)
+(var (symbol "timers.core" (name :new-timer)))
+
+(var timers.core/new-timer)
+
+(var (symbol "timers.core" (name :new-timer)))
+
 
 )
 
